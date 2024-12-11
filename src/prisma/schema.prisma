@@ -1,0 +1,45 @@
+datasource db {
+    url      = env("DATABASE_URL")
+    provider = "postgresql"
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+model transaction {
+    id           Int             @id @default(autoincrement())
+    time         DateTime        @default(now())
+    user         String
+    token        String
+    type         TransactionType
+    sig          String
+    tokenAmount  Float?
+    tokenDecimal Int?
+    solAmount    Float?
+}
+
+enum TransactionType {
+    Buy
+    Sell
+    Create
+}
+
+model article {
+    id       Int      @id @default(autoincrement())
+    time     DateTime @default(now())
+    author   String
+    content  String
+    likes    String[]
+    dislikes String[]
+    replyto  String   @unique
+}
+
+model mintQueue {
+    id          Int    @id @default(autoincrement())
+    mint        String
+    description String
+    name        String
+    symbol      String
+    file        String
+}
