@@ -1,10 +1,11 @@
 import WebSocket from 'ws';
-import { geyserURL, meteoraPool, pumpFunProgram, raydiumClmmPool } from '../config'
+import { geyserURL, meteoraPool, meteoraVault, pumpFunProgram, raydiumClmmPool, raydiumClmmVault, solanaConnection, solanaRpcUrl, stakedConnection, stakedRpcUrl, token, WSOL } from '../config'
 import { TransactionType } from '../type'
 import { storeTxInfo } from '../prisma'
+import { jupiterSwap } from '../jupiter';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
-export const runWebsocket = () => {
-
+export const track = () => {
     const ws = new WebSocket(geyserURL);
 
     const sendRequest = (ws: WebSocket) => {
@@ -33,7 +34,7 @@ export const runWebsocket = () => {
         setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
                 ws.ping();
-                console.log('Ping sent');
+                // console.log('Ping sent');
             }
         }, 30000); // Ping every 30 seconds
     }
@@ -53,7 +54,7 @@ export const runWebsocket = () => {
 
             {
                 const signatures = result.transaction.transaction.signatures;
-                console.log('signatures', signatures)
+                // console.log('signatures', signatures)
                 const innerInstructions = result.transaction.meta.innerInstructions;
                 const accountKeys = result.transaction.transaction.message.accountKeys;
                 const signer = accountKeys.filter((item: any) => item.signer).map((item: any) => item.pubkey)
@@ -70,54 +71,53 @@ export const runWebsocket = () => {
 
                 let decimal = 0, preSolBalance = 0, postSolBalance = 0, preTokenbalance = 0, postTokenbalance = 0
                 let owner = '', mint = ''
-                let type: TransactionType
+                let type: TransactionType | undefined
+                let pool: string = ''
+                let meteoraSolAmountChange = 0
+                let rayClmmSolAmountChange = 0
+                let arbitrage: boolean
 
                 if (accountKeys.map((item: any) => item.pubkey).includes('Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB')) {
-                    console.log('meteora')
-                } else if (accountKeys.map((item: any) => item.pubkey).includes('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK')) {
-                    console.log('raydium clmm')
-                }
+                    pool = 'meteora'
+                    const idx = accountKeys.map((item: any) => item.pubkey).indexOf(meteoraVault.toBase58())
+                    if (idx > 0) {
+                        preSolBalance = preBalances[idx]
+                        postSolBalance = postBalances[idx]
+                        // console.log(idx, preBalances[idx], postBalances[idx])
+                        meteoraSolAmountChange = preSolBalance - postSolBalance
 
-                if (accountKeys.map((item: any) => item.pubkey).includes('JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4')) {
-                    console.log('jupiter')
-                }
+                        if (meteoraSolAmountChange < 0) type = 'Buy'
+                        else type = 'Sell'
 
-                preTokenBalances.map((item: any) => {
-                    if (signer.includes(item.owner) && item.mint == 'SENDdRQtYMWaQrBroBrJ2Q53fgVuq95CV9UPGEvpCxa') {
-                        preTokenbalance = item.uiTokenAmount.uiAmount
-                        decimal = item.uiTokenAmount.decimals
-                        mint = item.mint
-                        owner = item.owner
-                        // console.log('preTokenbalance', preTokenbalance, decimal, mint, owner)
+                        console.log('ray', signatures[0], pool, type, (preSolBalance - postSolBalance) / LAMPORTS_PER_SOL)
                     }
-                })
+                }
+                if (accountKeys.map((item: any) => item.pubkey).includes('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK')) {
+                    pool = 'raydium'
 
-                postTokenBalances.map((item: any) => {
-                    if (signer.includes(item.owner) && item.mint == 'SENDdRQtYMWaQrBroBrJ2Q53fgVuq95CV9UPGEvpCxa') {
-                        postTokenbalance = item.uiTokenAmount.uiAmount
-                        decimal = item.uiTokenAmount.decimals
-                        mint = item.mint
-                        owner = item.owner
-                        // console.log('postTokenbalance', postTokenbalance, decimal, mint, owner)
+                    const idx = accountKeys.map((item: any) => item.pubkey).indexOf(raydiumClmmVault.toBase58())
+                    if (idx > 0) {
+                        preSolBalance = preBalances[idx]
+                        postSolBalance = postBalances[idx]
+                        // console.log(idx, preBalances[idx], postBalances[idx])
+                        rayClmmSolAmountChange = preSolBalance - postSolBalance
+
+                        if (rayClmmSolAmountChange < 0) type = 'Buy'
+                        else type = 'Sell'
+
+                        console.log('met', signatures[0], pool, type, (preSolBalance - postSolBalance) / LAMPORTS_PER_SOL)
                     }
-                })
-
-                if (owner && (preTokenbalance || postTokenbalance)) {
-                    const idx = accountKeys.map((item: any) => item.pubkey).indexOf(owner)
-                    preSolBalance = preBalances[idx]
-                    postSolBalance = postBalances[idx]
-                    // console.log('sol balance', preSolBalance, postSolBalance)
                 }
 
-                const tokenAmountChange = (postTokenbalance - preTokenbalance)
-                const solAmountChange = (postSolBalance - preSolBalance) / Math.pow(10, 9)
+                if (meteoraSolAmountChange * rayClmmSolAmountChange < 0) arbitrage = true
+                else arbitrage = false
 
-                if (tokenAmountChange != 0 && solAmountChange != 0) {
-                    if (tokenAmountChange > 0) type = 'Buy'
-                    else type = 'Sell'
-
-                    console.log(owner, mint, signatures[0], type, tokenAmountChange, decimal, solAmountChange)
+                const totalChange = meteoraSolAmountChange + rayClmmSolAmountChange
+                console.log(Date(), signatures[0], type, totalChange / LAMPORTS_PER_SOL, arbitrage ? 'arbitrage' : '')
+                if (!arbitrage && totalChange > 0) {
+                    await jupiterSwap(WSOL, token.toBase58(), 1_000_000, signatures[0])
                 }
+
             }
         } catch (err) {
             // console.error('Websocket message error:', err)
