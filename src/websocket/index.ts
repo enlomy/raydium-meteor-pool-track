@@ -114,6 +114,7 @@ export const track = () => {
 
                 const totalChange = meteoraSolAmountChange + rayClmmSolAmountChange
                 console.log(Date(), signatures[0], type, totalChange / LAMPORTS_PER_SOL, arbitrage ? 'arbitrage' : '')
+                console.log('----------------------------------------------------')
                 if (!arbitrage && totalChange > 0) {
                     await jupiterSwap(WSOL, token.toBase58(), 1_000_000, signatures[0])
                 }
