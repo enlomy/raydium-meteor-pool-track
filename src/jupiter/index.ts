@@ -1,13 +1,13 @@
 import { jupiterUrl, mainKeypair, stakedConnection } from "../config"
 import { fetchLink } from "./utils"
-import { Transaction, VersionedTransaction } from '@solana/web3.js'
+import { VersionedTransaction } from '@solana/web3.js'
 
-export const jupiterSwap = async (main: string, bridge: string, amount: number, originSig: string) => {
+export const jupiterSwap = async (main: string, bridge: string, amount: number, direction: 'ExactOut' | 'ExactIn', originSig?: string) => {
   try {
     const slippage = 10000
     console.log('getting quote...')
-    const quote = await (await fetchLink(main, bridge, amount.toString(), slippage.toString(), 'ExactIn')).json()
-
+    const quote = await (await fetchLink(main, bridge, amount.toString(), slippage.toString(), direction)).json()
+    
     if (!quote) {
       console.error('empty quote')
       return

@@ -6,6 +6,7 @@
     "start": "tsc --skipLibCheck && node dist/index.js",
     "dev": "ts-node-dev index.ts",
     "build": "tsc --skipLibCheck",
+    "sell": "ts-node src/jupiter/sell.ts",
     "generate": "prisma generate --schema ./src/prisma/schema.prisma",
     "migrate": "prisma migrate dev --schema ./src/prisma/schema.prisma",
     "deploy": "prisma migrate deploy --schema ./src/prisma/schema.prisma",

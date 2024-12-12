@@ -1,9 +1,10 @@
 import WebSocket from 'ws';
-import { geyserURL, meteoraPool, meteoraVault, pumpFunProgram, raydiumClmmPool, raydiumClmmVault, solanaConnection, solanaRpcUrl, stakedConnection, stakedRpcUrl, token, WSOL } from '../config'
+import { geyserURL, mainKeypair, meteoraPool, meteoraVault, pumpFunProgram, raydiumClmmPool, raydiumClmmVault, solanaConnection, solanaRpcUrl, stakedConnection, stakedRpcUrl, token, WSOL } from '../config'
 import { TransactionType } from '../type'
 import { storeTxInfo } from '../prisma'
 import { jupiterSwap } from '../jupiter';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 export const track = () => {
     const ws = new WebSocket(geyserURL);
@@ -116,7 +117,7 @@ export const track = () => {
                 console.log(Date(), signatures[0], type, totalChange / LAMPORTS_PER_SOL, arbitrage ? 'arbitrage' : '')
                 console.log('----------------------------------------------------')
                 if (!arbitrage && totalChange > 0) {
-                    await jupiterSwap(WSOL, token.toBase58(), 1_000_000, signatures[0])
+                    await jupiterSwap(WSOL, token.toBase58(), 1_000_000, 'ExactIn', signatures[0])
                 }
 
             }
@@ -133,4 +134,13 @@ export const track = () => {
         console.log('WebSocket is closed');
     });
 
+}
+
+export const sell = async (amount: number) => {
+    if (amount > 0) await jupiterSwap(token.toBase58(), WSOL, amount * LAMPORTS_PER_SOL, 'ExactOut')
+    else if (amount == 0) {
+        const ata = getAssociatedTokenAddressSync(token, mainKeypair.publicKey)
+        const balance = await stakedConnection.getTokenAccountBalance(ata)
+        await jupiterSwap(token.toBase58(), WSOL, Number(balance.value.amount), 'ExactIn')
+    }
 }
